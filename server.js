@@ -120,6 +120,7 @@ app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/projects', require('./src/routes/projects'));
 app.use('/api/diagrams', require('./src/routes/diagrams'));
 app.use('/api/users', require('./src/routes/users'));
+app.use('/api/code-generation', require('./src/routes/codeGeneration'));
 
 // Servir archivos estáticos
 app.use('/generated', express.static('public/generated-code'));
@@ -144,14 +145,84 @@ const PORT = process.env.PORT || 3001;
 // Asegurar sincronización de modelos al iniciar (crea tablas faltantes)
 const { sequelize } = require('./src/models');
 
-server.listen(PORT, async () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api`);
+// Función para intentar iniciar el servidor
+const startServer = async (retryCount = 0, maxRetries = 3) => {
   try {
-    await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
-    console.log('✅ Modelos sincronizados con la base de datos');
-  } catch (err) {
-    console.error('❌ Error sincronizando modelos:', err.message);
+    server.listen(PORT, async () => {
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/api`);
+      try {
+        await sequelize.authenticate();
+        await sequelize.sync({ alter: true });
+        console.log('✅ Modelos sincronizados con la base de datos');
+      } catch (err) {
+        console.error('❌ Error sincronizando modelos:', err.message);
+        // No cerramos el servidor por errores de base de datos
+        // para permitir reconexión automática
+      }
+    });
+
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Puerto ${PORT} en uso. Intentando liberar...`);
+        require('child_process').exec(`npx kill-port ${PORT}`, async (err) => {
+          if (err) {
+            console.error('Error al intentar liberar el puerto:', err);
+            if (retryCount < maxRetries) {
+              console.log(`Reintentando en 2 segundos... (Intento ${retryCount + 1}/${maxRetries})`);
+              setTimeout(() => startServer(retryCount + 1, maxRetries), 2000);
+            } else {
+              console.error(`❌ No se pudo iniciar el servidor después de ${maxRetries} intentos`);
+              process.exit(1);
+            }
+          } else {
+            console.log('✅ Puerto liberado. Reiniciando servidor...');
+            setTimeout(() => startServer(retryCount + 1, maxRetries), 1000);
+          }
+        });
+      } else {
+        console.error('❌ Error iniciando servidor:', error);
+        process.exit(1);
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error crítico iniciando servidor:', error);
+    if (retryCount < maxRetries) {
+      console.log(`Reintentando en 2 segundos... (Intento ${retryCount + 1}/${maxRetries})`);
+      setTimeout(() => startServer(retryCount + 1, maxRetries), 2000);
+    } else {
+      console.error(`❌ No se pudo iniciar el servidor después de ${maxRetries} intentos`);
+      process.exit(1);
+    }
   }
-});
+};
+
+// Manejar señales de terminación
+const gracefulShutdown = () => {
+  console.log('\n🛑 Recibida señal de terminación. Cerrando servidor...');
+  server.close(async () => {
+    console.log('✅ Servidor HTTP cerrado');
+    try {
+      await sequelize.close();
+      console.log('✅ Conexión a base de datos cerrada');
+      process.exit(0);
+    } catch (err) {
+      console.error('❌ Error cerrando conexión a base de datos:', err);
+      process.exit(1);
+    }
+  });
+
+  // Forzar cierre después de 10 segundos
+  setTimeout(() => {
+    console.error('❌ No se pudo cerrar limpiamente. Forzando cierre...');
+    process.exit(1);
+  }, 10000);
+};
+
+// Registrar manejadores de señales
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+// Iniciar servidor
+startServer();

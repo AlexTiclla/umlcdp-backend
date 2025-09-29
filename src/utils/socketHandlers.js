@@ -195,92 +195,167 @@ module.exports = (io) => {
     });
 
     // Eventos de elementos del diagrama según Fase 2 del plan
-    socket.on('diagram:element:add', (data) => {
-      const { diagramId, element } = data;
-      console.log(`➕ Elemento agregado en diagrama ${diagramId} por ${socket.user.username}`);
-      
-      if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
-        socket.emit('error', { message: 'No estás conectado a este diagrama' });
-        return;
-      }
-      
-      const elementWithUser = {
-        ...element,
-        createdBy: socket.user.id,
-        createdAt: new Date().toISOString()
-      };
+    socket.on('diagram:element:add', async (data) => {
+      try {
+        const { diagramId, element } = data;
+        console.log(`➕ Elemento agregado en diagrama ${diagramId} por ${socket.user.username}`);
 
-      // Broadcast según Fase 2 - evento 'elementAdded'
-      socket.to(`diagram:${diagramId}`).emit('elementAdded', {
-        element: elementWithUser,
-        user: socket.user
-      });
+        if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
+          socket.emit('error', { message: 'No estás conectado a este diagrama' });
+          return;
+        }
+
+        // Validar elemento
+        if (!element || !element.id) {
+          socket.emit('error', { message: 'Elemento inválido' });
+          return;
+        }
+
+        const elementWithUser = {
+          ...element,
+          createdBy: socket.user.id,
+          createdAt: new Date().toISOString()
+        };
+
+        // Verificar que el diagrama existe
+        const diagram = await Diagram.findByPk(diagramId);
+        if (!diagram) {
+          socket.emit('error', { message: 'Diagrama no encontrado' });
+          return;
+        }
+
+        // Broadcast según Fase 2 - evento 'elementAdded'
+        socket.to(`diagram:${diagramId}`).emit('elementAdded', {
+          element: elementWithUser,
+          user: socket.user
+        });
+
+        // Confirmar al usuario que envió
+        socket.emit('elementAddedConfirm', {
+          elementId: element.id,
+          success: true
+        });
+
+      } catch (error) {
+        console.error('Error en diagram:element:add:', error);
+        socket.emit('error', { message: 'Error agregando elemento' });
+      }
     });
 
-    socket.on('diagram:element:update', (data) => {
-      const { diagramId, elementId, changes } = data;
-      console.log(`✏️ Elemento ${elementId} actualizado en diagrama ${diagramId} por ${socket.user.username}`);
-      
-      if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
-        socket.emit('error', { message: 'No estás conectado a este diagrama' });
-        return;
-      }
+    socket.on('diagram:element:update', async (data) => {
+      try {
+        const { diagramId, elementId, changes } = data;
+        console.log(`✏️ Elemento ${elementId} actualizado en diagrama ${diagramId} por ${socket.user.username}`);
 
-      // Verificar que el elemento no esté bloqueado por otro usuario
-      const lock = collaborationState.elementLocks.get(elementId);
-      if (lock && lock.userId !== socket.userId) {
-        socket.emit('error', { 
-          message: 'Elemento bloqueado por otro usuario',
+        if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
+          socket.emit('error', { message: 'No estás conectado a este diagrama' });
+          return;
+        }
+
+        // Validar datos
+        if (!elementId || !changes) {
+          socket.emit('error', { message: 'Datos de actualización inválidos' });
+          return;
+        }
+
+        // Verificar que el elemento no esté bloqueado por otro usuario
+        const lock = collaborationState.elementLocks.get(elementId);
+        if (lock && lock.userId !== socket.userId) {
+          socket.emit('error', {
+            message: 'Elemento bloqueado por otro usuario',
+            elementId,
+            lockedBy: lock.userId
+          });
+          return;
+        }
+
+        // Verificar que el diagrama existe
+        const diagram = await Diagram.findByPk(diagramId);
+        if (!diagram) {
+          socket.emit('error', { message: 'Diagrama no encontrado' });
+          return;
+        }
+
+        const updateData = {
           elementId,
-          lockedBy: lock.userId 
-        });
-        return;
-      }
-      
-      const updateData = {
-        elementId,
-        changes,
-        updatedBy: socket.user.id,
-        updatedAt: new Date().toISOString()
-      };
+          changes,
+          updatedBy: socket.user.id,
+          updatedAt: new Date().toISOString()
+        };
 
-      // Broadcast según Fase 2 - evento 'elementUpdated'
-      socket.to(`diagram:${diagramId}`).emit('elementUpdated', {
-        ...updateData,
-        user: socket.user
-      });
+        // Broadcast según Fase 2 - evento 'elementUpdated'
+        socket.to(`diagram:${diagramId}`).emit('elementUpdated', {
+          ...updateData,
+          user: socket.user
+        });
+
+        // Confirmar al usuario que envió
+        socket.emit('elementUpdatedConfirm', {
+          elementId,
+          success: true
+        });
+
+      } catch (error) {
+        console.error('Error en diagram:element:update:', error);
+        socket.emit('error', { message: 'Error actualizando elemento' });
+      }
     });
 
-    socket.on('diagram:element:delete', (data) => {
-      const { diagramId, elementId } = data;
-      console.log(`🗑️ Elemento ${elementId} eliminado en diagrama ${diagramId} por ${socket.user.username}`);
-      
-      if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
-        socket.emit('error', { message: 'No estás conectado a este diagrama' });
-        return;
-      }
+    socket.on('diagram:element:delete', async (data) => {
+      try {
+        const { diagramId, elementId } = data;
+        console.log(`🗑️ Elemento ${elementId} eliminado en diagrama ${diagramId} por ${socket.user.username}`);
 
-      // Verificar que el elemento no esté bloqueado por otro usuario
-      const lock = collaborationState.elementLocks.get(elementId);
-      if (lock && lock.userId !== socket.userId) {
-        socket.emit('error', { 
-          message: 'Elemento bloqueado por otro usuario',
+        if (!socket.currentDiagram || socket.currentDiagram !== diagramId) {
+          socket.emit('error', { message: 'No estás conectado a este diagrama' });
+          return;
+        }
+
+        // Validar datos
+        if (!elementId) {
+          socket.emit('error', { message: 'ID de elemento requerido' });
+          return;
+        }
+
+        // Verificar que el elemento no esté bloqueado por otro usuario
+        const lock = collaborationState.elementLocks.get(elementId);
+        if (lock && lock.userId !== socket.userId) {
+          socket.emit('error', {
+            message: 'Elemento bloqueado por otro usuario',
+            elementId,
+            lockedBy: lock.userId
+          });
+          return;
+        }
+
+        // Verificar que el diagrama existe
+        const diagram = await Diagram.findByPk(diagramId);
+        if (!diagram) {
+          socket.emit('error', { message: 'Diagrama no encontrado' });
+          return;
+        }
+
+        // Limpiar lock si existe
+        collaborationState.elementLocks.delete(elementId);
+
+        // Broadcast según Fase 2 - evento 'elementDeleted'
+        socket.to(`diagram:${diagramId}`).emit('elementDeleted', {
           elementId,
-          lockedBy: lock.userId 
+          deletedBy: socket.user.id,
+          deletedAt: new Date().toISOString(),
+          user: socket.user
         });
-        return;
-      }
 
-      // Limpiar lock si existe
-      collaborationState.elementLocks.delete(elementId);
-      
-      // Broadcast según Fase 2 - evento 'elementDeleted'
-      socket.to(`diagram:${diagramId}`).emit('elementDeleted', {
-        elementId,
-        deletedBy: socket.user.id,
-        deletedAt: new Date().toISOString(),
-        user: socket.user
-      });
+        // Confirmar al usuario que envió
+        socket.emit('elementDeletedConfirm', {
+          elementId,
+          success: true
+        });
+
+      } catch (error) {
+        console.error('Error en diagram:element:delete:', error);
+        socket.emit('error', { message: 'Error eliminando elemento' });
+      }
     });
 
     // Sistema de bloqueo mejorado según Fase 2

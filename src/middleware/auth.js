@@ -7,10 +7,18 @@ const { User } = require('../models');
  */
 const authenticateToken = async (req, res, next) => {
   try {
+    // Intentar obtener token del header de autorización
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    
+    // Si no hay token en el header, intentar obtenerlo de la consulta
+    if (!token && req.query && req.query.token) {
+      token = req.query.token;
+      console.log('Token obtenido de parámetro de consulta:', token.substring(0, 10) + '...');
+    }
 
     if (!token) {
+      console.log('Token de acceso requerido pero no proporcionado');
       return res.status(401).json({
         success: false,
         message: 'Token de acceso requerido',

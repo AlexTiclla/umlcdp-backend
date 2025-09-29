@@ -7,6 +7,7 @@ const Project = require('./Project');
 const ProjectMember = require('./ProjectMember');
 const Diagram = require('./Diagram');
 const DiagramVersion = require('./DiagramVersion');
+const GeneratedCode = require('./GeneratedCode');
 
 // Inicializar modelos
 const models = {
@@ -14,7 +15,8 @@ const models = {
   Project: Project(sequelize, Sequelize.DataTypes),
   ProjectMember: ProjectMember(sequelize, Sequelize.DataTypes),
   Diagram: Diagram(sequelize, Sequelize.DataTypes),
-  DiagramVersion: DiagramVersion(sequelize, Sequelize.DataTypes)
+  DiagramVersion: DiagramVersion(sequelize, Sequelize.DataTypes),
+  GeneratedCode: GeneratedCode(sequelize, Sequelize.DataTypes)
 };
 
 // Definir asociaciones

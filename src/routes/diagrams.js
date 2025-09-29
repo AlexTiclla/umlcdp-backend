@@ -245,4 +245,49 @@ router.get('/:id/versions', authenticateToken, diagramParamValidation, diagramCo
  */
 router.post('/:id/versions', authenticateToken, diagramParamValidation, diagramController.createDiagramVersion);
 
+// Ruta temporal para debugging - actualización simple
+router.patch('/:id/quick-update', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    const { Diagram } = require('../models');
+
+    console.log(`🔧 Quick update para diagrama ${id}`);
+
+    const diagram = await Diagram.findOne({
+      where: { id, isActive: true }
+    });
+
+    if (!diagram) {
+      return res.status(404).json({
+        success: false,
+        message: 'Diagrama no encontrado'
+      });
+    }
+
+    if (content !== undefined) {
+      await diagram.update({
+        content: typeof content === 'string' ? JSON.parse(content) : content,
+        lastModified: new Date()
+      });
+    }
+
+    console.log(`✅ Quick update completado para diagrama ${diagram.name}`);
+
+    res.json({
+      success: true,
+      message: 'Diagrama actualizado exitosamente',
+      data: diagram
+    });
+
+  } catch (error) {
+    console.error('❌ Error en quick update:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
