@@ -121,6 +121,7 @@ app.use('/api/projects', require('./src/routes/projects'));
 app.use('/api/diagrams', require('./src/routes/diagrams'));
 app.use('/api/users', require('./src/routes/users'));
 app.use('/api/code-generation', require('./src/routes/codeGeneration'));
+app.use('/api/ai', require('./src/routes/ai'));
 
 // Servir archivos estáticos
 app.use('/generated', express.static('public/generated-code'));

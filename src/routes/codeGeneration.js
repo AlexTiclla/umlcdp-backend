@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const codeGenerationController = require('../controllers/codeGenerationController');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -45,7 +45,7 @@ const auth = require('../middleware/auth');
  */
 
 // Middleware de autenticación para todas las rutas
-router.use(auth.authenticateToken);
+router.use(authenticateToken);
 
 /**
  * @swagger
